@@ -1,0 +1,47 @@
+# ────────────── Python artifacts ──────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+*.spec           # pyinstaller / nuitka
+
+# ────────────── Virtual‑envs ──────────────
+env/
+venv/
+.venv/
+
+# ────────────── Playwright / Chromium cache ──────────────
+#  (keeps repo small – browsers can be re‑downloaded)
+.playwright/**/cache/**
+
+# ────────────── Logs / runtime output ──────────────
+*.log
+*.log.[0-9]*
+# MQTT debug dumps
+*.pcap
+
+
+# ────────────── Shell history / temporary scripts ──────────────
+*.sh~
+*.swp
+*.swo
+*~
+
+# ────────────── Editor / IDE cruft ──────────────
+.vscode/
+.idea/
+*.code-workspace
+
+# ────────────── OS cruft ──────────────
+.DS_Store
+Thumbs.db
+
+
+# ────────────── Secrets (edit if you rename the file) ──────────────
+*.env
+secrets.yaml

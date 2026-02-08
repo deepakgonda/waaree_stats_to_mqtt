@@ -1,0 +1,30 @@
+services:
+  waaree-poller:
+    # Use pre-built image from GHCR (built by GitHub Actions for ARM64)
+    # Replace <your-github-username> with your actual GitHub username
+    # image: ghcr.io/deepakgonda/waaree_stats_to_mqtt:latest
+    # Uncomment the line below to build locally instead:
+    build: .
+    container_name: waaree-poller
+    restart: unless-stopped
+    environment:
+      - TZ=Asia/Kolkata
+    env_file:
+      - .env
+    # Resource limits (adjust for your Pi 5)
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: "2.0"
+        reservations:
+          memory: 256M
+    # Use host networking so it can reach MQTT on your LAN
+    # (simpler than bridging on a Pi; change if you prefer bridge mode)
+    # Status dashboard available at http://<pi-ip>:8099
+    network_mode: host
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"

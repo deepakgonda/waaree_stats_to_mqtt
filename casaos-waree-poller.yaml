@@ -1,0 +1,55 @@
+name: waaree-poller
+services:
+  waaree-poller:
+    cpu_shares: 90
+    command: []
+    container_name: waaree-poller
+    deploy:
+      resources:
+        limits:
+          cpus: "2.0"
+          memory: 2048M
+    environment:
+      - DAY_FETCH_INTERVAL=120
+      - DAY_START_HOUR=5
+      - EARNINGS_WAIT_SEC=30
+      - FETCH_HARD_TIMEOUT_SEC=180
+      - LOG_LEVEL=INFO
+      - LOGIN_TIMEOUT_MS=90000
+      - MQTT_HOST=192.168.0.5
+      - MQTT_INITIAL_RETRY_SEC=10
+      - MQTT_MAX_RETRY_SEC=300
+      - MQTT_PORT=1883
+      - MQTT_TOPIC=homeassistant/waaree/energy
+      - NAV_TIMEOUT_MS=90000
+      - NIGHT_FETCH_INTERVAL=3600
+      - NIGHT_START_HOUR=19
+      - PUBLISH_INTERVAL=120
+      - SETTLE_WAIT=10
+      - TZ=Asia/Kolkata
+      - WAAREE_PASS=somepassword
+      - WAAREE_USER=someuser
+    hostname: waaree-poller
+    image: ghcr.io/deepakgonda/waaree_stats_to_mqtt:latest
+    labels:
+      icon: https://cdn11.bigcommerce.com/s-unnwlv5df8/images/stencil/160x50/logo_final_new_1657128016__75544.original.png
+    restart: unless-stopped
+    ports: []
+    volumes: []
+    devices: []
+    cap_add: []
+    network_mode: host
+    privileged: false
+x-casaos:
+  author: self
+  category: self
+  hostname: ""
+  icon: https://cdn11.bigcommerce.com/s-unnwlv5df8/images/stencil/160x50/logo_final_new_1657128016__75544.original.png
+  index: /
+  is_uncontrolled: false
+  port_map: "8099"
+  scheme: http
+  store_app_id: picturesque_nico
+  title:
+    custom: ""
+    en_us: waaree-poller
