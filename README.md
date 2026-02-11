@@ -67,6 +67,7 @@ All config is via environment variables (set in `.env` file):
 | `WAAREE_PASS` | *(required)* | Waaree Digital password |
 | `MQTT_HOST` | `192.168.0.2` | MQTT broker IP |
 | `MQTT_PORT` | `1883` | MQTT broker port |
+| `MQTT_KEEPALIVE` | `300` | MQTT keep-alive timeout (seconds) |
 | `MQTT_TOPIC` | `homeassistant/waaree/energy` | MQTT topic |
 | `DAY_START_HOUR` | `5` | Day mode start (24h) |
 | `NIGHT_START_HOUR` | `19` | Night mode start (24h) |

@@ -131,13 +131,14 @@ signal.signal(signal.SIGINT, _request_stop)
 # ───────────── MQTT helper ──────────────────────────────────────────
 @asynccontextmanager
 async def mqtt_client(host: str, port: int):
-    async with MQTT(hostname=host, port=port) as client:
-        log.info("Connected to MQTT %s:%s", host, port)
+    async with MQTT(hostname=host, port=port, keepalive=MQTT_KEEPALIVE) as client:
+        log.info("Connected to MQTT %s:%s (keepalive=%ss)", host, port, MQTT_KEEPALIVE)
         yield client
 
 
 async def publish_cached(mqtt: MQTT) -> bool:
-    """Publish cached payload (retain=True) every publish cycle."""
+    """Publish cached payload (retain=True) every publish cycle.
+    Raises MqttCodeError if the connection is dead so the caller can reconnect."""
     if not LAST_GOOD_PAYLOAD:
         STATUS["publish_fail_count"] += 1
         return False
@@ -482,6 +483,7 @@ async def start_status_server():
     return runner
 
 
+MQTT_KEEPALIVE = int(os.getenv("MQTT_KEEPALIVE", 300))  # seconds; must exceed longest fetch
 MQTT_INITIAL_RETRY_SEC = int(os.getenv("MQTT_INITIAL_RETRY_SEC", 10))
 MQTT_MAX_RETRY_SEC = int(os.getenv("MQTT_MAX_RETRY_SEC", 300))
 
@@ -538,6 +540,14 @@ async def run_forever():
                         return
 
                     except Exception as exc:
+                        # Check if it's an MQTT connection error → break to reconnect
+                        from aiomqtt.exceptions import MqttCodeError, MqttError
+                        if isinstance(exc, (MqttCodeError, MqttError)):
+                            STATUS["mqtt_connected"] = False
+                            STATUS["mqtt_error"] = str(exc)
+                            STATUS["publish_fail_count"] += 1
+                            log.error("MQTT disconnected: %s — will reconnect", exc)
+                            break  # break inner loop → outer loop reconnects
                         log.exception("Loop error: %s", exc)
 
                     finally:
