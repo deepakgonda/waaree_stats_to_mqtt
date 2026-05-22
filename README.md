@@ -75,6 +75,7 @@ All config is via environment variables (set in `.env` file):
 | `DAY_FETCH_INTERVAL` | `120` | Fetch interval during day |
 | `NIGHT_FETCH_INTERVAL` | `3600` | Fetch interval at night |
 | `STATUS_PORT` | `8099` | Status dashboard port |
+| `MAX_CONSECUTIVE_FETCH_FAILURES` | `5` | Exit after N consecutive fetch failures so Docker restarts the container |
 | `LOG_LEVEL` | `INFO` | Logging level |
 
 See [.env.example](.env.example) for the full list.

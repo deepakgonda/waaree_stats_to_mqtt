@@ -67,6 +67,10 @@ NAV_TIMEOUT_MS = int(os.getenv("NAV_TIMEOUT_MS", 90_000))
 # Hard kill for one fetch attempt
 FETCH_HARD_TIMEOUT_SEC = int(os.getenv("FETCH_HARD_TIMEOUT_SEC", 180))
 
+# After this many consecutive fetch failures, exit(1) so Docker
+# (restart: unless-stopped) restarts the container — clears stuck DNS/network state.
+MAX_CONSECUTIVE_FETCH_FAILURES = int(os.getenv("MAX_CONSECUTIVE_FETCH_FAILURES", 5))
+
 EARNINGS_KEY = os.getenv("EARNINGS_KEY", "/c/v0/plant/earnings/all")
 
 STATUS_PORT = int(os.getenv("STATUS_PORT", 8099))
@@ -101,6 +105,7 @@ STATUS = {
     "last_publish_time": None,
     "publish_count": 0,
     "publish_fail_count": 0,
+    "consecutive_fetch_failures": 0,
     "next_action": "starting",
 }
 
@@ -265,6 +270,29 @@ async def fetch_once_and_update_cache() -> bool:
                     await page.context.close()
 
 
+def _record_fetch_outcome(ok: bool) -> None:
+    """Track consecutive fetch failures. After MAX_CONSECUTIVE_FETCH_FAILURES,
+    exit the process so Docker (restart: unless-stopped) restarts the container."""
+    if ok:
+        if STATUS["consecutive_fetch_failures"]:
+            log.info("Fetch recovered after %d consecutive failure(s).",
+                     STATUS["consecutive_fetch_failures"])
+        STATUS["consecutive_fetch_failures"] = 0
+        return
+
+    STATUS["consecutive_fetch_failures"] += 1
+    fails = STATUS["consecutive_fetch_failures"]
+    log.warning("Consecutive fetch failures: %d/%d", fails, MAX_CONSECUTIVE_FETCH_FAILURES)
+
+    if fails >= MAX_CONSECUTIVE_FETCH_FAILURES:
+        log.critical(
+            "Reached %d consecutive fetch failures — exiting so Docker restarts the container.",
+            MAX_CONSECUTIVE_FETCH_FAILURES,
+        )
+        # Hard exit: bypass asyncio/exception handling so nothing swallows it.
+        os._exit(1)
+
+
 async def ensure_cache_seeded():
     """
     ✅ Guarantee we have a payload on first run:
@@ -279,10 +307,13 @@ async def ensure_cache_seeded():
         ok = await asyncio.wait_for(fetch_once_and_update_cache(), timeout=FETCH_HARD_TIMEOUT_SEC)
         if not ok:
             log.warning("Cache seeding fetch failed; will retry on next cycle.")
+        _record_fetch_outcome(bool(ok))
     except asyncio.TimeoutError:
         log.exception("Cache seeding fetch timed out after %ss; will retry next cycle.", FETCH_HARD_TIMEOUT_SEC)
+        _record_fetch_outcome(False)
     except Exception as exc:
         log.exception("Cache seeding fetch failed: %s", exc)
+        _record_fetch_outcome(False)
 
 
 async def maybe_fetch_due():
@@ -302,17 +333,24 @@ async def maybe_fetch_due():
     log.info("Fetch due (mode=%s, interval=%ss). Running fresh login fetch...", mode, interval)
 
     try:
-        await asyncio.wait_for(fetch_once_and_update_cache(), timeout=FETCH_HARD_TIMEOUT_SEC)
+        ok = await asyncio.wait_for(fetch_once_and_update_cache(), timeout=FETCH_HARD_TIMEOUT_SEC)
+        if not ok:
+            STATUS["last_fetch_ok"] = False
+            STATUS["last_fetch_error"] = "Earnings response not captured"
+            STATUS["fetch_fail_count"] += 1
+        _record_fetch_outcome(bool(ok))
     except asyncio.TimeoutError:
         STATUS["last_fetch_ok"] = False
         STATUS["last_fetch_error"] = f"Timed out after {FETCH_HARD_TIMEOUT_SEC}s"
         STATUS["fetch_fail_count"] += 1
         log.exception("Fetch timed out after %ss (using cached payload)", FETCH_HARD_TIMEOUT_SEC)
+        _record_fetch_outcome(False)
     except Exception as exc:
         STATUS["last_fetch_ok"] = False
         STATUS["last_fetch_error"] = str(exc)
         STATUS["fetch_fail_count"] += 1
         log.exception("Fetch failed: %s", exc)
+        _record_fetch_outcome(False)
 
 
 # ───────────── Status Web Server ────────────────────────────────────
@@ -345,6 +383,8 @@ def _build_status_dict() -> dict:
         "last_fetch_error": STATUS["last_fetch_error"],
         "fetch_count": STATUS["fetch_count"],
         "fetch_fail_count": STATUS["fetch_fail_count"],
+        "consecutive_fetch_failures": STATUS["consecutive_fetch_failures"],
+        "max_consecutive_fetch_failures": MAX_CONSECUTIVE_FETCH_FAILURES,
         "fetch_interval_sec": get_fetch_interval_seconds(),
         "next_fetch_in_sec": next_fetch_in,
         "last_publish_time": STATUS["last_publish_time"],
@@ -455,6 +495,7 @@ async def handle_index(request: web.Request) -> web.Response:
   <h2>Fetch (Waaree Scrape)</h2>
   <div class="row"><span class="label">Last Fetch</span><span class="val">{s['last_fetch_time'] or '—'} {fetch_badge}</span></div>
   <div class="row"><span class="label">Fetches</span><span class="val">{s['fetch_count']} ok / {s['fetch_fail_count']} fail</span></div>
+  <div class="row"><span class="label">Consecutive Fails</span><span class="val">{s['consecutive_fetch_failures']}/{s['max_consecutive_fetch_failures']} <small>(exits to restart at max)</small></span></div>
   <div class="row"><span class="label">Fetch Interval</span><span class="val">{s['fetch_interval_sec']}s ({s['mode'].lower()} mode)</span></div>
   <div class="row"><span class="label">Next Fetch In</span><span class="val">{next_fetch_str}</span></div>
 </div>
